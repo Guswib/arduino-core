@@ -112,9 +112,20 @@ uint16_t SensirionShdlcCommunication::receiveFrame(SensirionShdlcRxFrame& frame,
     if (error) {
         return error;
     }
-    error = unstuffByte(dataLength, serial, startTime, timeoutMicros);
-    if (error) {
-        return error;
+
+    if(frame._state == 0 ){
+        //No error frame, read the dataLength
+        error = unstuffByte(dataLength, serial, startTime, timeoutMicros);
+        if (error) {
+            return error;
+        }
+    }else{
+        // error frame was received, and dataLength should be 0.
+        uint8_t errorCode;
+        dataLength = 0;
+        error = unstuffByte(errorCode, serial, startTime, timeoutMicros);
+        if (error)
+            return error;
     }
 
     uint8_t checksum =
@@ -125,19 +136,16 @@ uint16_t SensirionShdlcCommunication::receiveFrame(SensirionShdlcRxFrame& frame,
     }
 
     // An error frame does not have any data eventhough the value of "dataLength" is not zero.
-    // Therefore, only read data from the buffer if the frame state is 0, i.e, the frame is not of an error frame.
     
-    if(frame._state == 0 ){
-        for(size_t i = 0; i < dataLength; i++){ 
-            error = unstuffByte(current, serial, startTime, timeoutMicros);
-            if (error) {
-                return error;
-            }
-            frame._buffer[i] = current;
-            checksum += current;
+    for(size_t i = 0; i < dataLength; i++){ 
+        error = unstuffByte(current, serial, startTime, timeoutMicros);
+        if (error) {
+            return error;
         }
+        frame._buffer[i] = current;
+        checksum += current;
     }
-
+    
     uint8_t expectedChecksum = ~checksum;
     uint8_t actualChecksum;
     error = unstuffByte(actualChecksum, serial, startTime, timeoutMicros);
